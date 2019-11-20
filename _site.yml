@@ -1,0 +1,82 @@
+name: National Teacher Survey
+output_dir: '.'
+navbar:
+  title: ReadWorks Analysis
+  left:
+  - text: Overall results
+    href: overall.html
+  - text: By region
+    menu:
+        - text: "Region"
+        - text: "West"
+          href: west.html
+        - text: "South"
+          href: south.html
+        - text: "Midwest"
+          href: midwest.html
+        - text: "Northeast"
+          href: northeast.html
+        - text: "International"
+          href: international.html
+  - text: By Teacher Exp.
+    menu:
+        - text: "Number of Years Teaching"
+        - text: "0-5"
+          href: tch0-5.html
+        - text: "6-10"
+          href: tch6-10.html
+        - text: "11+"
+          href: tch_gt11.html
+  - text: By Grade
+    menu:
+        - text: "Grades taught:"
+        - text: "Pre-K"
+          href: pk.html
+        - text: "Kindergarten"
+          href: kinder.html
+        - text: "1-2"
+          href: g12.html
+        - text: "3-5"
+          href: g35.html
+        - text: "6-8"
+          href: g68.html
+        - text: "High School"
+          href: hs.html
+  - text: By Content
+    menu:
+        - text: "Content areas taught:"
+        - text: "English/Language Arts"
+          href: ela.html
+        - text: "Mathematics"
+          href: math.html
+        - text: "Science"
+          href: sci.html
+        - text: "Social Studies"
+          href: soc-stud.html
+  - text: By Students Taught
+    menu:
+        - text: "Student populations:"
+        - text: "Special Education"
+          href: sped.html
+        - text: "English Learners"
+          href: el.html
+        - text: "Dyslexic"
+          href: dyslexic.html
+        - text: "Trauma"
+          href: trauma.html
+        - text: "Low Income"
+          href: low-inc.html
+        - text: "Non-English Speaking"
+          href: non-english.html
+  right:
+  - icon: fa-github
+    href: https://github.com/uo-datasci-specialization/c2-communicate_transform_data
+output:
+  html_document:
+    theme: journal
+    css: website-custom.css
+    includes:
+      after_body: footer.html
+    lib_dir: site_libs
+    self_contained: no
+

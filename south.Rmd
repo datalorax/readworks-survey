@@ -1,0 +1,660 @@
+---
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r, overall-plots}
+library(tidyverse)
+library(readxl)
+library(here)
+library(janitor)
+library(drlib)
+
+theme_set(theme_minimal(20) +
+            theme(legend.position = "bottom",
+                  plot.title.position = "plot",
+                  panel.grid.major.x = element_line(colour = "gray60"),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_blank())
+          )
+
+files <- list.files(here("data"), full.names = TRUE)
+d <- map_df(grep("A-F|B-F", files, value = TRUE), read_xlsx) %>% 
+  clean_names() %>% 
+  mutate(state = gsub(".+\\((.{2}).+", "\\1", where_tch))
+
+regions <- read_xlsx(grep("DirectoryV3", files, value = TRUE), sheet = "Region")
+  
+regions <- regions %>% 
+  mutate(state = gsub("\\('(.{2})'.+", 
+                          "\\1", 
+                          `State relation to region`)) %>% 
+  select(state, region = Region)
+
+d <- d %>% 
+  left_join(regions) %>% 
+  mutate(region = ifelse(where_tch == "International/non-US state or territory",
+                         "International",
+                         ifelse(!is.na(where_tch) & is.na(region),
+                                "Territory",
+                                region)))
+d <- d %>% 
+  filter(region == "South")
+```
+
+# Background and System Use/Experience
+
+## How did you learn about ReadWorks?
+```{r, fig.width = 9}
+learn_methods <- d %>% 
+  select(rspdnt_id, starts_with("learn")) %>% 
+  gather(option, response, -rspdnt_id) %>% 
+  drop_na(response) %>% 
+  count(response) %>% 
+  mutate(response = reorder(response, n))
+
+ggplot(learn_methods, aes(response, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## How often do you visit/use ReadWorks
+```{r, fig.width = 10}
+d %>% 
+  select(rspdnt_id, visit_rw, use_rw) %>% 
+  gather(what, rate, -rspdnt_id) %>% 
+  count(rate, what) %>%
+  mutate(what = ifelse(what == "use_rw", "Use", "Visit"),
+         rate = reorder(rate, n)) %>% 
+ggplot(aes(rate, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  facet_wrap(~what) +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## Would you recommend ReadWorks? {.tabset .tabset-fade}
+
+### Overall Scores
+
+```{r}
+ggplot(d, aes(rate1_10)) +
+  geom_bar(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+### Why did you choose the score you did?
+
+```{r by_score}
+by_score <- d %>% 
+  select(rspdnt_id, rate1_10, matches("^r\\d")) %>% 
+  gather(var, response, matches("^r\\d")) %>% 
+  drop_na(response) %>% 
+  count(rate1_10, response) %>% 
+  nest(-rate1_10) 
+
+by_score <- by_score %>% 
+  mutate(data = map(data, ~mutate(.x ,response = reorder(response, n))),
+         plot = map2(data, rate1_10, ~
+           ggplot(.x, aes(response, n)) +
+           geom_col(fill = "#5C6670", alpha = 0.9) +
+           coord_flip() +
+           ylim(0, max(by_score$data[[11]]$n)) +
+           labs(y = "Number of Responses",
+                x = "",
+                title = paste("Why did you choose a score of", .y)) +
+          theme_minimal(base_size = 10)
+                      )
+         ) 
+
+walk(rev(by_score$plot), print)
+```
+
+## {-}
+
+## How much of your ELA block is used for literacy?
+
+```{r}
+d %>% 
+  drop_na(amt_ela_lit_ctr_percent) %>% 
+  mutate(ela_percent = factor(amt_ela_lit_ctr_percent,
+                              levels = c("None", 
+                                         "About 10%",
+                                         "About 25%",
+                                         "About 50%",
+                                         "About 75%",
+                                         "Greater than 75%"))) %>% 
+ggplot(aes(ela_percent)) +
+  geom_bar(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+
+```
+
+## How do you use ReadWorks with students in different configurations?
+```{r, fig.height = 25, fig.width = 10}
+new_labs <- d %>% 
+  select(rspdnt_id, amt_ela_lit_ctr_percent, matches("^ar\\d")) %>% 
+  gather(var, response, starts_with("ar")) %>% 
+  drop_na(response, amt_ela_lit_ctr_percent) %>% 
+  count(response) %>%
+  mutate(new_lab = c(
+    "I do not use Readworks in stations",
+    "Small groups",
+    "Individual students",
+    "Individual work with student follow-up",
+    "Independent work with teacher follow-up",
+    "Small groups with teacher follow-up",
+    "Small groups with student follow-up"
+  )) %>% 
+  select(-n)
+
+
+d %>% 
+  select(rspdnt_id, amt_ela_lit_ctr_percent, matches("^ar\\d")) %>% 
+  gather(var, response, starts_with("ar")) %>% 
+  drop_na(response, amt_ela_lit_ctr_percent) %>% 
+  count(response, amt_ela_lit_ctr_percent) %>% 
+  left_join(new_labs) %>% 
+ggplot(aes(new_lab, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  facet_wrap(~amt_ela_lit_ctr_percent, ncol = 1) +
+    labs(y = "Number of Responses",
+         x = "",
+         title = "Plots separated by proportion of time spent in centers")
+```
+
+## What are the main ways you use ReadWorks?
+```{r, fig.width = 12}
+d %>% 
+  select(matches("device\\d")) %>% 
+  gather(device, response) %>% 
+  drop_na(response) %>% 
+  count(response) %>% 
+  mutate(response = c(
+           "I do not use ReadWorks texts",
+           "Aligning with other curricula",
+           "Aligning with ELA curricula",
+           "Aligning with science/social studies curricula",
+           "Matching to my students' reading levels",
+           "Supporting an activity"
+         ),
+         response = reorder(response, n)) %>% 
+ggplot(aes(response, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "",
+       "I mostly think about...")
+```
+
+
+## Do you use ReadWorks vocabulary supports and/or activities? {.tabset .tabset-fade}
+
+### Overall
+
+```{r}
+d %>% 
+  select(rw_voc_use_yn) %>% 
+  drop_na(rw_voc_use_yn) %>% 
+ggplot(aes(rw_voc_use_yn)) +
+  geom_bar(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+### Why?
+
+```{r fig.width = 15, fig.height = 10}
+d %>% 
+  select(starts_with("voc_r")) %>% 
+  gather(var, response) %>% 
+  drop_na(response)  %>%
+  count(response) %>% 
+  mutate(response = reorder(response, n)) %>% 
+ggplot(aes(response, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "",
+       title = "Why do you use ReadWorks vocabulary supports?")
+```
+
+### Why not?
+```{r fig.width = 15, fig.height = 10}
+d %>% 
+  select(starts_with("voc_n")) %>% 
+  gather(var, response) %>% 
+  drop_na(response)  %>%
+  count(response) %>% 
+  mutate(response = reorder(response, n)) %>% 
+  ggplot(aes(response, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "",
+       title = "Why do you NOT use ReadWorks vocabulary supports?")
+```
+
+## {-}
+
+## Does ReadWorks improve reading skills?
+```{r, fig.height = 25}
+new_labs <- tibble(
+  var = c("bck_know", "build_voc", "chlg_txt", "excite", "imp_comp", 
+          "rec_t_struc"),
+  lab = c("Build background knowledge?", "Build vocabulary?", 
+          "Read more challenging text?", "Build reading excitement?",
+          "Improve comprehension?", "Recognize text structure?")
+)
+
+d %>%
+  select(excite, imp_comp, bck_know, build_voc, chlg_txt, rec_t_struc) %>% 
+  gather(var, val) %>% 
+  drop_na(val) %>% 
+  count(var, val) %>% 
+  left_join(new_labs) %>% 
+  mutate(val = factor(val, 
+                      levels = c("I don't know", "None at all", "A little",
+                                 "A moderate amount", "A lot", "A great deal")
+                      )) %>% 
+ggplot(aes(val, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  facet_wrap(~lab, ncol = 1) +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+
+## Do you have regular access to a projector smartboard?
+
+```{r}
+d %>%
+  drop_na(access_sb) %>%
+ggplot(aes(access_sb)) +
+  geom_bar(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+
+## How many devices are in the classroom
+```{r, fig.height = 12, fig.width = 15}
+d %>%
+  drop_na(num_devices) %>%
+  mutate(num_devices = factor(
+    num_devices,
+    levels = c("None",
+               "1 for me to use for instruction and none for students to use",
+               "1 for every 10 students or more",
+               "1 for every 5-9 students",
+               "1 for every 2-4 students",
+               "1 for every student")
+      )
+    ) %>%
+ggplot(aes(num_devices)) +
+  geom_bar(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "") +
+  theme(axis.text.x = element_text(size = 25),
+        axis.text.y = element_text(size = 25),
+        axis.title.x = element_text(size = 35))
+```
+
+## What devices do you use?
+```{r, fig.width = 10}
+d %>%
+  select(dev_access, tech_use1, tablet1, smart_ph1) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(var, val) %>%
+  mutate(val = reorder(val, n)) %>%
+ggplot(aes(val, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## Which devices do students use?
+```{r, fig.width = 12}
+d %>%
+  select(which_dev, tech_use2, tablet2, smartph2) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(var, val) %>%
+  mutate(val = reorder(val, n)) %>%
+ggplot(aes(val, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## Which devices do students use outside of school?
+```{r, fig.width = 10}
+d %>%
+  select(starts_with("device_ac")) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(var, val) %>%
+  mutate(val = ifelse(val == "I don‚Äôt know", "I don't know", val),
+         val = factor(
+           val,
+           levels = c(
+             "My students do not access edtech resources outside of school",
+             "I don't know",
+             "Smartphones",
+             "Tablets",
+             "Desktop/laptop computers (including Chromebooks)"
+             )
+           )
+         ) %>%
+ggplot(aes(val, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## How easy is it to grade written assignments?
+```{r fig.width = 10}
+d %>%
+  drop_na(ease_grade_res) %>%
+  mutate(ease_grade_res =
+           factor(ease_grade_res,
+                  levels = c("I have never graded student written responses within the ReadWorks digital platform",
+                             "Very easy", "Easy", "Hard", "Very hard"),
+                  labels = c("No experience", "Very easy", "Easy", "Hard", "Very hard"))) %>%
+  ggplot(aes(ease_grade_res)) +
+  geom_bar(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## How easy is it to find materials
+```{r fig.width = 10}
+d %>%
+  drop_na(find_mat_rw) %>%
+  mutate(find_mat_rw =
+           factor(find_mat_rw,
+                  levels = c("I have never searched¬†the ReadWorks digital platform for materials or supports for individual students",
+                             "Very easy", "Easy", "Hard", "Very hard"),
+                  labels = c("No experience",
+                             "Very easy", "Easy", "Hard", "Very hard"))) %>%
+ggplot(aes(find_mat_rw)) +
+  geom_bar(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## What troubles do you have?
+```{r, fig.height = 10}
+d %>%
+  select(starts_with("why")) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(var, val) %>%
+  mutate(val = c("None", "Finding time to learn system",
+                 "Difficult to understand","Takes too much time",
+                 "Don't have devices", "Old devices",
+                 "No access outside of school", "Time on devices",
+                 "Prefer paper"),
+         val = reorder(val, n)) %>%
+ggplot(aes(val, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## What new features would you like to see?
+```{r, fig.width = 15, fig.height = 25}
+d %>%
+  select(starts_with("feat")) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(var, val) %>%
+  mutate(val = reorder(val, n)) %>%
+ggplot(aes(val, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  scale_y_continuous(expand =  c(0, 0)) +
+  labs(y = "Number of Responses",
+       x = "") +
+  theme(axis.text.x = element_text(size = 20),
+        axis.text.y = element_text(size = 20),
+        axis.title.x = element_text(size = 30))
+```
+
+## Variables within instructional applications using ReadWorks
+
+```{r, fig.height = 25}
+percent_var_labs <- data.frame(
+  var = c("bac_know_percent", "comp_strat_percent", "indep_read_percent",
+          "morph_wf_percent", "read_aloud_percent", "test_take_percent",
+          "voc_defs_percent"),
+  lab = c("Background Knowledge", "Comprehension Strategies",
+          "Independent Reading", "Morpheme", "Read aloud", "Test Taking",
+          "Vocabulary")
+)
+
+percents_count <- d %>%
+  select(bac_know_percent, comp_strat_percent, voc_defs_percent,
+         morph_wf_percent, test_take_percent, indep_read_percent,
+         read_aloud_percent) %>%
+  gather(var, percent) %>%
+  drop_na(percent) %>%
+  left_join(percent_var_labs) %>%
+  count(lab, percent)
+
+percents_count$percent <- factor(
+  percents_count$percent,
+  levels = unique(percents_count$percent)[c(6:7, 1:4, 9, 5, 8)],
+  labels = unique(percents_count$percent)[c(6:7, 1:4, 4, 8, 8)]
+)
+
+ggplot(percents_count, aes(percent, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  facet_wrap(~lab, ncol = 1) +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## Trust-related variables
+```{r fig.height = 15, fig.width = 8}
+d %>%
+  select(effect_tchr_yn, trust_rwlm, qual_rwlm, rw_qt) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(var, val) %>%
+  mutate(val = ifelse(nchar(val) > 30, "Never used", val),
+         val = ifelse(val == "Higher¬†quality", "Higher Quality", ifelse(
+                      val == "Lesser¬†quality", "Lesser Quality", val)),
+         var = case_when(var == "effect_tchr_yn" ~
+                           "Increase teaching effectiveness?",
+                         var == "qual_rwlm" ~
+                           "Higher quality than other materials?",
+                         var == "rw_qt" ~
+                           "Do you trust ReadWorks for guidance/training?",
+                         TRUE ~
+                           "Do you trust ReadWorks more/less than other materials?"
+                         ) ) %>%
+ggplot(aes(val, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  coord_flip() +
+  facet_wrap(~var, scales = "free_y", ncol = 1) +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+# Demographics
+## What's your role?
+```{r fig.height = 8}
+d %>%
+  count(role) %>%
+  drop_na(role) %>%
+  mutate(role = reorder(role, n)) %>%
+  ggplot(aes(role, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## What's your school program?
+```{r}
+d %>%
+  count(school_prog) %>%
+  drop_na(school_prog) %>%
+  mutate(school_prog = reorder(school_prog, n)) %>%
+ggplot(aes(school_prog, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## How many years have you taught?
+```{r}
+d %>%
+  count(yrs_teach) %>%
+  drop_na(yrs_teach) %>%
+  mutate(yrs_teach = case_when(yrs_teach == "43529" ~ "3-5",
+                               yrs_teach == "43626" ~ "6-10",
+                               yrs_teach == "43784" ~ "11-15",
+                               TRUE ~ yrs_teach),
+         yrs_teach = reorder(yrs_teach, n),
+         ) %>%
+ggplot(aes(yrs_teach, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## Do you teach in a Title 1 school?
+```{r}
+d %>%
+  count(tch_title) %>%
+  drop_na(tch_title) %>%
+  mutate(tch_title = reorder(tch_title, n)) %>%
+ggplot(aes(tch_title, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## What grades do you teach?
+```{r, fig.height = 8}
+grades_taught <- d %>%
+  select(pre_k, gk, matches("^g\\d?\\d$"), post_sec, adults, other_grade) %>%
+  gather(grade, selection) %>%
+  drop_na(selection) %>%
+  count(selection) %>%
+  mutate(selection = factor(selection,
+                            levels = rev(c("Pre-school/PK", "K", 1:12,
+                                       "Post-secondary", "Adults", "Other"))))
+
+ggplot(grades_taught, aes(selection, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## What content area do you teach?
+
+```{r fig.height = 7.75}
+content <- d %>%
+  select(ela = subjects, math, science, soc_stud, world_lang, art_mus, library,
+         tech_cs, other_content) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(val) %>%
+  mutate(content = reorder(val, n))
+
+ggplot(content, aes(content, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## What population do you currently teach?
+```{r fig.height = 8, fig.width = 10}
+stu_pops <- d %>%
+  select(gened = pops_teach, sped, ell, dyslex, trauma, low_inc) %>%
+  gather(var, val) %>%
+  drop_na(val) %>%
+  count(val) %>%
+  mutate(pop = reorder(val, n))
+
+ggplot(stu_pops, aes(pop, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## What non-English language do your students speak
+````{r fig.height = 9, fig.width = 9}
+languages <- d %>%
+  select(lang_non_eng, arabic, chinese, french, german, hatian, korean,
+         russian, spanish, tagalog, vietnamese, other_lang) %>%
+  gather(var, val) %>%
+  mutate(val = ifelse(val == "I don‚Äôt know", "I don't know", val)) %>%
+  drop_na(val) %>%
+  count(val) %>%
+  mutate(language = reorder(val, n))
+
+ggplot(languages, aes(language, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```
+
+## Where do you teach
+```{r fig.height = 20, fig.width = 9}
+d %>%
+  count(where_tch) %>%
+  drop_na(where_tch) %>%
+  mutate(where_tch = gsub("(.+) \\(.+", "\\1", where_tch),
+         where_tch = reorder(where_tch, n)) %>%
+ggplot(aes(where_tch, n)) +
+  geom_col(fill = "#5C6670", alpha = 0.9) +
+  scale_y_continuous(expand =  c(0, 0)) +
+  coord_flip() +
+  labs(y = "Number of Responses",
+       x = "")
+```

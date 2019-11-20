@@ -1,0 +1,57 @@
+---
+title: "ReadWorks National Teacher Survey Analysis"
+---
+
+This is a website that was built to communicate the results of a national survey of teachers relating to the ReadWorks comprehension system.
+
+## Number of respondents by state
+
+```{r map, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.height = 9}
+library(tidyverse)
+library(readxl)
+library(here)
+library(janitor)
+
+files <- list.files(here("data"), full.names = TRUE)
+d <- map_df(grep("A-F|B-F", files, value = TRUE), read_xlsx) %>% 
+  clean_names() %>% 
+  mutate(state = gsub(".+\\((.{2}).+", "\\1", where_tch))
+
+regions <- read_xlsx(grep("DirectoryV3", files, value = TRUE), sheet = "Region")
+  
+regions <- regions %>% 
+  mutate(state = gsub("\\('(.{2})'.+", 
+                          "\\1", 
+                          `State relation to region`)) %>% 
+  select(state, region = Region)
+
+d <- d %>% 
+  left_join(regions) %>% 
+  mutate(region = ifelse(where_tch == "International/non-US state or territory",
+                         "International",
+                         ifelse(!is.na(where_tch) & is.na(region),
+                                "Territory",
+                                region)))
+
+states <- map_data("state")
+state_counts <- d %>% 
+  count(state)
+
+abb <- read_csv("https://github.com/jasonong/List-of-US-States/raw/master/states.csv") %>% 
+  rename(state = Abbreviation,
+         region = State)
+
+state_counts <- left_join(state_counts, abb) %>% 
+  mutate(region = tolower(region))
+
+states <- left_join(states, state_counts)
+
+ggplot(states, aes(long, lat, group = group)) +
+  geom_polygon(aes(fill = n)) +
+  coord_map() +
+  scale_fill_viridis_c("Survey response\n") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.key.width = unit(3, "cm"),
+        plot.margin = margin(t = -10, unit = "cm"))
+```
