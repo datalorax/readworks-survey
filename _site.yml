@@ -70,7 +70,7 @@ navbar:
           href: non-english.html
   right:
   - icon: fa-github
-    href: https://github.com/uo-datasci-specialization/c2-communicate_transform_data
+    href: https://github.com/datalorax/readworks-survey
 output:
   html_document:
     theme: journal
