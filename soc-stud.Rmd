@@ -155,17 +155,18 @@ new_labs <- d %>%
   select(rspdnt_id, amt_ela_lit_ctr_percent, matches("^ar\\d")) %>% 
   gather(var, response, starts_with("ar")) %>% 
   drop_na(response, amt_ela_lit_ctr_percent) %>% 
-  count(response) %>%
+  count(var, response) %>%
   mutate(new_lab = c(
     "I do not use Readworks in stations",
-    "Small groups",
-    "Individual students",
-    "Individual work with student follow-up",
+    "Independent work with follow-up",
     "Independent work with teacher follow-up",
+    "Small groups with follow-up",
     "Small groups with teacher follow-up",
-    "Small groups with student follow-up"
+    "Work with individual students",
+    "Small groups"
   )) %>% 
   select(-n)
+
 
 
 d %>% 
